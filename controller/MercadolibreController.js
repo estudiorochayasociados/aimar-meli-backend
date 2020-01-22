@@ -113,10 +113,10 @@ exports.addItem = async (data, addShipping, percentPrice, type, token) => {
     const itemMeli = {};
     itemMeli.title = data.title;
     itemMeli.currency_id = "ARS";
-    itemMeli.available_quantity = (data.stock) ? data.stock : 1;
+    itemMeli.available_quantity = (data.stock) ? data.stock : 0;
     itemMeli.buying_mode = "buy_it_now";
     itemMeli.condition = "new";
-    itemMeli.price = ((data.price.default * (percentPrice / 100 ) + data.price.default) + shipping).toFixed(2);
+    itemMeli.price = ((data.price.default * (percentPrice / 100) + data.price.default) + shipping).toFixed(2);
     itemMeli.description = { plain_text: data.description.text };
     itemMeli.pictures = [];
     itemMeli.attributes = [];
@@ -128,15 +128,19 @@ exports.addItem = async (data, addShipping, percentPrice, type, token) => {
     itemMeli.listing_type_id = type;
     itemMeli.category_id = category.id;
 
-    try {
-        const itemPost = await axios.post("https://api.mercadolibre.com/items?access_token=" + token, itemMeli);
-        const findMongoDb = await ProductsModel.findOne({ "code.web": data.code.web });
-        await findMongoDb.mercadolibre.push({ type: type, shipping: addShipping, code: itemPost.data.id, price: itemMeli.price, percent: percentPrice });
-        await findMongoDb.save();
-        return ({ status: 200, title: itemMeli.title, type: type, shipping: addShipping, code: itemPost.data.id, price: itemMeli.price, percent: percentPrice });
-    }
-    catch (e) {
-        return ({ status: 400, title: itemMeli.title, error: e.response.data });
+    if (!data.stock) {
+        return ({ status: 200, title: data.title, error: { message: "Anuncio no subido por bajo stock" } });
+    } else {
+        try {
+            const itemPost = await axios.post("https://api.mercadolibre.com/items?access_token=" + token, itemMeli);
+            const findMongoDb = await ProductsModel.findOne({ "code.web": data.code.web });
+            await findMongoDb.mercadolibre.push({ type: type, shipping: addShipping, code: itemPost.data.id, price: itemMeli.price, percent: percentPrice });
+            await findMongoDb.save();
+            return ({ status: 200, title: itemMeli.title, type: type, shipping: addShipping, code: itemPost.data.id, price: itemMeli.price, percent: percentPrice });
+        }
+        catch (e) {
+            return ({ status: 400, title: itemMeli.title, error: e.response.data });
+        }
     }
 }
 
@@ -147,7 +151,7 @@ exports.editItem = async (itemId, data, addShipping, percentPrice, type, token) 
     var shipping = (addShipping === true && (category.dimensions !== null || category.dimensions !== 0)) ? await this.shippingPriceByDimension(category.dimensions) : 0;
     if (!data.stock) {
         await this.changeState(itemId, 'paused', token);
-        return ({ status: 200, title: data.title, error: { message: "Anuncio pausado por bajo stock" }});
+        return ({ status: 200, title: data.title, error: { message: "Anuncio pausado por bajo stock" } });
     } else {
         await this.changeState(itemId, 'active', token);
         //CREATE OBJETO MELI
